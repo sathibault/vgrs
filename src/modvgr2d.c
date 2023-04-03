@@ -587,14 +587,12 @@ const mp_obj_fun_builtin_fixed_t generate_fun = {{&mp_type_fun_builtin_2}, {._2 
 
 #define SPI_SIZE 128
 
-static mp_obj_t display2d(mp_obj_t addr_in, mp_obj_t list_in) {
-  mp_obj_t ops = generate(addr_in, list_in);
-
+static mp_obj_t display2d(mp_obj_t ops_in) {
   uint8_t *buf = (uint8_t *)m_malloc(128);
   
   size_t len = 0;
   mp_obj_t *list = NULL;
-  mp_obj_list_get(ops, &len, &list);
+  mp_obj_list_get(ops_in, &len, &list);
 
   buf[0] = fpga_graphics_dev();
   buf[1] = 0x03;
@@ -611,7 +609,7 @@ static mp_obj_t display2d(mp_obj_t addr_in, mp_obj_t list_in) {
   MFREE(buf, 128);
   return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(display2d_fun, display2d);
+STATIC MP_DEFINE_CONST_FUN_OBJ_1(display2d_fun, display2d);
 
 static const mp_rom_map_elem_t module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_rvgr) },
