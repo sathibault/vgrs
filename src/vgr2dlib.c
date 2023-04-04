@@ -340,9 +340,11 @@ static void init_polystroke_iter(polygon_t *poly, poly_iter_t *iter) {
   xr = (poly->width >= 3) ? XFX(poly->width)>>1 : XFX(3)>>1;
   yr = (poly->width >= 3) ? (YFX(poly->width)-1)>>1 : 1;
   list_minmax(poly->pts, poly->n_pts, &mnx, &mxx, &mny, &mxy);
-  mnx -= xr;
+  if (mnx >= xr)
+    mnx -= xr;
   mxx += xr;
-  mny -= yr;
+  if (mny >= yr)
+    mny -= yr;
   mxy += yr;
   iter->tx = (uint16_t)poly->tr.tx;
   iter->ty = (uint16_t)poly->tr.ty;

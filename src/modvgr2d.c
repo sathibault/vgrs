@@ -512,13 +512,21 @@ static mp_obj_t generate(mp_obj_t addr_in, mp_obj_t list_in) {
 	}
 	mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(cmd>>8));
 	mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(cmd&0xff));
-      }
+      } else
+	curX = 0;
       for (i = 0; i < ri; i+=2) {
 	s = runs[i+1] - runs[i];
 	if (s < MIN_DX)
 	  continue;
 
 	dx = runs[i] - curX;
+	if (curY == 0 && curX == 0 && dx < MIN_DX) {
+	  // top-left corner special case
+	  if (runs[i+1] < 2*MIN_DX)
+	    continue; // below minimum span
+	  dx = MIN_DX;
+	  s = runs[i+1] - MIN_DX;
+	}
 	if (dx > 0 && dx < MIN_DX) {
 	  printf("ERR");
 	  for (int k = 0; k < ri; k+=2)
