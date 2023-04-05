@@ -33,9 +33,9 @@ limitations under the License.
 
 #define MAX_RUNS 128
 
-#define MAX_DX 0x7fff // 9.4
-#define MAX_NLX 0x7fff // 9.4
-#define MAX_SPANX 0x7fff // 9.4
+#define MAX_DX 0x1fff // 9.4
+#define MAX_NLX 0x1fff // 9.4
+#define MAX_SPANX 0x1fff // 9.4
 #define MAX_CLRX 0xff // 4.4
 #define MIN_DX 0x10
 
