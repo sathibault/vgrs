@@ -44,6 +44,9 @@ extern void fpga_write_internal(uint8_t *buf, unsigned int len, bool hold);
 
 
 void *vgr2d_alloc(size_t size, int n) {
+#ifdef __MINGW32__
+  printf("ALLOC %d\n", size*n);
+#endif
   return m_malloc(size * n);
 }
 
@@ -410,10 +413,11 @@ static iter_base_t *make_iter(mp_obj_t obj) {
   return NULL;
 }
 
-static void sort_runs(uint16_t *runs, uint8_t *clr, int n) {
+static int sort_runs(uint16_t *runs, uint8_t *clr, int n) {
   uint8_t c;
   uint16_t x1, x2;
-  
+  int valid;
+
   for (int i = 0; i < n; i++) {
     for (int j = n-1; j > i; j--) {
       int ri = j<<1;
@@ -430,6 +434,7 @@ static void sort_runs(uint16_t *runs, uint8_t *clr, int n) {
       }
     }
   }
+  valid = ((runs[1]-runs[0])>=MIN_DX) ? 1 : 0;
   for (int i = 1; i < n; i++) {
     int ri = i<<1;
     int dx = (int)runs[ri]-(int)(runs[ri-1]+1);
@@ -438,7 +443,10 @@ static void sort_runs(uint16_t *runs, uint8_t *clr, int n) {
       if (runs[ri] > runs[ri+1]) // close small gaps
 	runs[ri] = runs[ri+1]; // will be discarded later
     }
+    if ((runs[ri+1]-runs[ri])>=MIN_DX)
+      valid += 1;
   }
+  return (valid > 0) ? n : 0;
 }
 
 static mp_obj_t generate(mp_obj_t addr_in, mp_obj_t list_in) {
@@ -451,7 +459,7 @@ static mp_obj_t generate(mp_obj_t addr_in, mp_obj_t list_in) {
 
   uint16_t cmd;
   uint16_t curY, y, prevY;
-  uint16_t x1, x2, dx, s, curX;
+  uint16_t x1, x2, dx, s, s0, curX;
   uint8_t c;
   int i, ri;
 
@@ -498,9 +506,10 @@ static mp_obj_t generate(mp_obj_t addr_in, mp_obj_t list_in) {
       }
     }
 
-    if (ri > 0) {
-      sort_runs(runs, clr, ri>>1);
+    if (ri > 0)
+      ri = sort_runs(runs, clr, ri>>1) << 1;
 
+    if (ri > 0) {
       x1 = runs[0];
       if (curY > 0) {
 	if (curY == (prevY+1) && x1 <= MAX_NLX) {
@@ -546,8 +555,11 @@ static mp_obj_t generate(mp_obj_t addr_in, mp_obj_t list_in) {
 	}
 	
 	if (s > MAX_CLRX) {
-	  cmd = (((uint16_t)clr[i>>1])<<8)|MAX_CLRX;
-	  s -= MAX_CLRX;
+	  s0 = s-MAX_CLRX;
+	  while (s0>MAX_SPANX) s0-=MAX_SPANX;
+	  s0 = (s0<MIN_DX) ? (MAX_CLRX-(XFX(1)-s0)) : MAX_CLRX;
+	  cmd = (((uint16_t)clr[i>>1])<<8)|s0;
+	  s -= s0;
 	} else {
 	  cmd = (((uint16_t)clr[i>>1])<<8)|s;
 	  s = 0;
