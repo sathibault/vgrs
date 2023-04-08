@@ -45,7 +45,7 @@ extern void fpga_write_internal(uint8_t *buf, unsigned int len, bool hold);
 
 void *vgr2d_alloc(size_t size, int n) {
 #ifdef __MINGW32__
-  printf("ALLOC %d\n", size*n);
+  printf("ALLOC %d\n", (unsigned int)size*n);
 #endif
   return m_malloc(size * n);
 }
@@ -99,7 +99,7 @@ static mp_obj_t rect_make_new(const mp_obj_type_t *type, size_t n_args, size_t n
 
 static void rect_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
   (void)kind;
-  
+
   rect_obj_t * self = (rect_obj_t *)MP_OBJ_TO_PTR(self_in);
   mp_printf(print, "Rect(%d x %d,color[%d])@", self->rect.w, self->rect.h, self->rect.fclr);
   transform_print(print, &(self->rect.tr));
@@ -190,7 +190,7 @@ static mp_obj_t polygon_make_new(const mp_obj_type_t *type, size_t n_args, size_
 
 static void polygon_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
   (void)kind;
-  
+
   polygon_obj_t * self = (polygon_obj_t *)MP_OBJ_TO_PTR(self_in);
   mp_printf(print, "Polygon([");
 
@@ -271,7 +271,7 @@ static mp_obj_t polyline_make_new(const mp_obj_type_t *type, size_t n_args, size
 
 static void polyline_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
   (void)kind;
-  
+
   polyline_obj_t * self = (polyline_obj_t *)MP_OBJ_TO_PTR(self_in);
   mp_printf(print, "Polyline([");
 
@@ -335,13 +335,13 @@ static mp_obj_t line_make_new(const mp_obj_type_t *type, size_t n_args, size_t n
     self->poly.pts[j] = XFX(mp_obj_get_int(args[j]));
     self->poly.pts[j+1] = YFX(mp_obj_get_int(args[j+1]));
   }
-  
+
   return MP_OBJ_FROM_PTR(self);
 }
 
 static void line_print(const mp_print_t *print, mp_obj_t self_in, mp_print_kind_t kind) {
   (void)kind;
-  
+
   line_obj_t * self = (line_obj_t *)MP_OBJ_TO_PTR(self_in);
   mp_printf(print, "Line([");
 
@@ -449,6 +449,12 @@ static int sort_runs(uint16_t *runs, uint8_t *clr, int n) {
   return (valid > 0) ? n : 0;
 }
 
+static uint16_t split_span(uint16_t n, uint16_t sz0, uint16_t sz1) {
+  uint16_t m = n - sz0;
+  while (m>sz1) m -= sz1;
+  return (m<MIN_DX) ? (sz0 - (XFX(1)-m)) : sz0;
+}
+
 static mp_obj_t generate(mp_obj_t addr_in, mp_obj_t list_in) {
   uint16_t addr = mp_obj_get_int(addr_in);
 
@@ -459,7 +465,7 @@ static mp_obj_t generate(mp_obj_t addr_in, mp_obj_t list_in) {
 
   uint16_t cmd;
   uint16_t curY, y, prevY;
-  uint16_t x1, x2, dx, s, s0, curX;
+  uint16_t x1, x2, dx, dx0, s, s0, curX;
   uint8_t c;
   int i, ri;
 
@@ -474,7 +480,7 @@ static mp_obj_t generate(mp_obj_t addr_in, mp_obj_t list_in) {
 
   mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(addr>>8));
   mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(addr&0xff));
-  
+
   prevY = 0xffff;
   do {
     // find next closest line
@@ -542,6 +548,13 @@ static mp_obj_t generate(mp_obj_t addr_in, mp_obj_t list_in) {
 	    printf(" %d,%d",runs[k],runs[k+1]);
 	  printf("\n");
 	}
+	if (dx > MAX_DX) {
+	  dx0 = split_span(dx, MAX_DX, MAX_DX);
+	  cmd = 0x8000|dx0;
+	  mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(cmd>>8));
+	  mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(cmd&0xff));
+	  dx -= dx0;
+	}
 	while (dx > MAX_DX) {
 	  cmd = 0x8000|MAX_DX;
 	  mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(cmd>>8));
@@ -553,11 +566,9 @@ static mp_obj_t generate(mp_obj_t addr_in, mp_obj_t list_in) {
 	  mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(cmd>>8));
 	  mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(cmd&0xff));
 	}
-	
+
 	if (s > MAX_CLRX) {
-	  s0 = s-MAX_CLRX;
-	  while (s0>MAX_SPANX) s0-=MAX_SPANX;
-	  s0 = (s0<MIN_DX) ? (MAX_CLRX-(XFX(1)-s0)) : MAX_CLRX;
+	  s0 = split_span(s, MAX_CLRX, MAX_SPANX);
 	  cmd = (((uint16_t)clr[i>>1])<<8)|s0;
 	  s -= s0;
 	} else {
@@ -577,7 +588,7 @@ static mp_obj_t generate(mp_obj_t addr_in, mp_obj_t list_in) {
 	  mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(cmd>>8));
 	  mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(cmd&0xff));
 	}
-	
+
 	curX = runs[i+1] + 1;
       }
       prevY = curY;
@@ -599,7 +610,7 @@ static mp_obj_t generate(mp_obj_t addr_in, mp_obj_t list_in) {
   MFREE(clr, MAX_RUNS * sizeof(uint8_t));
   MFREE(runs, 2 * MAX_RUNS * sizeof(uint16_t));
   MFREE(iters, len * sizeof(iter_base_t*));
-  
+
   return MP_OBJ_FROM_PTR(return_list);
 }
 
@@ -611,7 +622,7 @@ static mp_obj_t display2d(mp_obj_t addr_in, mp_obj_t list_in) {
   mp_obj_t ops = generate(addr_in, list_in);
 
   uint8_t *buf = (uint8_t *)m_malloc(128);
-  
+
   size_t len = 0;
   mp_obj_t *list = NULL;
   mp_obj_list_get(ops, &len, &list);
