@@ -455,12 +455,14 @@ static uint16_t split_span(uint16_t n, uint16_t sz0, uint16_t sz1) {
   return (m<MIN_DX) ? (sz0 - (XFX(1)-m)) : sz0;
 }
 
-static mp_obj_t generate(mp_obj_t addr_in, mp_obj_t list_in) {
-  uint16_t addr = mp_obj_get_int(addr_in);
+static mp_obj_t generate(size_t n_args, const mp_obj_t *args) {
+  uint16_t addr = mp_obj_get_int(args[0]);
+  int xres = XFX(mp_obj_get_int(args[2]));
+  int yres = mp_obj_get_int(args[3]);
 
   size_t list_len = 0;
   mp_obj_t *list = NULL;
-  mp_obj_list_get(list_in, &list_len, &list);
+  mp_obj_list_get(args[1], &list_len, &list);
   int len = (int)list_len;
 
   uint16_t cmd;
@@ -496,14 +498,15 @@ static mp_obj_t generate(mp_obj_t addr_in, mp_obj_t list_in) {
 	}
       }
     }
-    if (curY == 0xffff) break;
+    if (curY == 0xffff || curY >= yres) break;
 
     // collect runs on this line
     ri = 0;
     for (i = 0; i < len; i++) {
       if (iters[i] != NULL) {
 	while (iters[i]->nextRun(iters[i], curY, &x1, &x2, &c)) {
-	  if (x2 > x1 && (ri>>1) < MAX_RUNS) {
+	  if (x2 > x1 && x1 < xres && (ri>>1) < MAX_RUNS) {
+	    if (x2 >= xres) x2 = xres-1;
 	    clr[ri>>1] = c;
 	    runs[ri++] = x1;
 	    runs[ri++] = x2;
@@ -614,12 +617,12 @@ static mp_obj_t generate(mp_obj_t addr_in, mp_obj_t list_in) {
   return MP_OBJ_FROM_PTR(return_list);
 }
 
-const mp_obj_fun_builtin_fixed_t generate_fun = {{&mp_type_fun_builtin_2}, {._2 = &generate}};
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(generate_fun, 4, 4, generate);
 
 #define SPI_SIZE 128
 
-static mp_obj_t display2d(mp_obj_t addr_in, mp_obj_t list_in) {
-  mp_obj_t ops = generate(addr_in, list_in);
+static mp_obj_t display2d(size_t n_args, const mp_obj_t *args) {
+  mp_obj_t ops = generate(n_args, args);
 
   uint8_t *buf = (uint8_t *)m_malloc(128);
 
@@ -642,7 +645,7 @@ static mp_obj_t display2d(mp_obj_t addr_in, mp_obj_t list_in) {
   MFREE(buf, 128);
   return mp_const_none;
 }
-STATIC MP_DEFINE_CONST_FUN_OBJ_2(display2d_fun, display2d);
+STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(display2d_fun, 4, 4, display2d);
 
 static const mp_rom_map_elem_t module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_rvgr) },
