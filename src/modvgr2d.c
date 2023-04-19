@@ -413,10 +413,10 @@ static iter_base_t *make_iter(mp_obj_t obj) {
   return NULL;
 }
 
-static int sort_runs(uint16_t *runs, uint8_t *clr, int n) {
+static int sort_runs(uint16_t *runs, uint8_t *clr, int nx) {
+  int n = nx>>1;
   uint8_t c;
   uint16_t x1, x2;
-  int valid;
 
   for (int i = 0; i < n; i++) {
     for (int j = n-1; j > i; j--) {
@@ -434,19 +434,40 @@ static int sort_runs(uint16_t *runs, uint8_t *clr, int n) {
       }
     }
   }
-  valid = ((runs[1]-runs[0])>=MIN_DX) ? 1 : 0;
+
+  int oc = 1;
+  int oi = 2;
+  int ri = 2;
   for (int i = 1; i < n; i++) {
-    int ri = i<<1;
-    int dx = (int)runs[ri]-(int)(runs[ri-1]+1);
-    if (dx < MIN_DX) {
-      runs[ri] = runs[ri-1]+1;
-      if (runs[ri] > runs[ri+1]) // close small gaps
-	runs[ri] = runs[ri+1]; // will be discarded later
+    if (runs[ri] > runs[oi-1]) {
+      uint16_t dx = runs[ri]-(runs[oi-1]+1);
+      // dx 0 is okay, otherwise must meet minimum
+      if (dx != 0 && dx < MIN_DX)
+	runs[ri] = runs[oi-1]+1+MIN_DX;
+    } else {
+      // overlapped
+      runs[ri] = runs[oi-1]+1; // make abutted
     }
-    if ((runs[ri+1]-runs[ri])>=MIN_DX)
-      valid += 1;
+    if (runs[ri] < runs[ri+1]) { // not negative run
+      if ((runs[oi-1]+1) == runs[ri] && clr[i] == clr[oc-1]) {
+	// abutted, same color can be merged
+	runs[oi-1] = runs[ri+1]; // extend previous
+	// discard current
+      } else if ((runs[ri+1]-runs[ri]) >= MIN_DX) { // has minimum width
+	if (ri != oi) {
+	  runs[oi] = runs[ri];
+	  runs[oi+1] = runs[ri+1];
+	  clr[oc] = clr[i];
+	}
+	oi += 2;
+	oc += 1;
+      }
+    }
+    ri += 2;
   }
-  return (valid > 0) ? n : 0;
+  if (oi == 2 && ((runs[1]-runs[0]) < MIN_DX))
+    return 0;
+  return oi;
 }
 
 static uint16_t split_span(uint16_t n, uint16_t sz0, uint16_t sz1) {
@@ -516,7 +537,7 @@ static mp_obj_t generate(size_t n_args, const mp_obj_t *args) {
     }
 
     if (ri > 0)
-      ri = sort_runs(runs, clr, ri>>1) << 1;
+      ri = sort_runs(runs, clr, ri);
 
     if (ri > 0) {
       x1 = runs[0];
