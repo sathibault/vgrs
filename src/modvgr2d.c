@@ -439,20 +439,25 @@ static int sort_runs(uint16_t *runs, uint8_t *clr, int nx) {
   int oi = 2;
   int ri = 2;
   for (int i = 1; i < n; i++) {
-    if (runs[ri] > runs[oi-1]) {
-      uint16_t dx = runs[ri]-(runs[oi-1]+1);
+    if (runs[ri] >= runs[oi-1]) {
+      uint16_t dx = runs[ri]-runs[oi-1];
       // dx 0 is okay, otherwise must meet minimum
-      if (dx != 0 && dx < MIN_DX)
-	runs[ri] = runs[oi-1]+1+MIN_DX;
+      if (dx != 0) {
+	if (XFX_INT(runs[ri]) == (XFX_INT(runs[oi-1])+1)) {
+	  runs[oi-1] = XFX(XFX_INT(runs[ri]));
+	  runs[ri] = runs[oi-1];
+	} else if (dx < MIN_DX) {
+	  runs[ri] = runs[oi-1]+MIN_DX;
+	}
+      }
     } else {
       // overlapped
-      runs[ri] = runs[oi-1]+1; // make abutted
+      runs[ri] = runs[oi-1]; // make abutted
     }
     if (runs[ri] < runs[ri+1]) { // not negative run
-      if ((runs[oi-1]+1) == runs[ri] && clr[i] == clr[oc-1]) {
+      if (runs[oi-1] == runs[ri] && clr[i] == clr[oc-1]) {
 	// abutted, same color can be merged
-	runs[oi-1] = runs[ri+1]; // extend previous
-	// discard current
+	runs[oi-1] = runs[ri+1]; // extend previous, and discard current
       } else if ((runs[ri+1]-runs[ri]) >= MIN_DX) { // has minimum width
 	if (ri != oi) {
 	  runs[oi] = runs[ri];
@@ -540,6 +545,12 @@ static mp_obj_t generate(size_t n_args, const mp_obj_t *args) {
       ri = sort_runs(runs, clr, ri);
 
     if (ri > 0) {
+#if 0
+      printf("%d>",curY);
+      for (i = 0; i < ri; i+=2)
+	printf("(%f,%f)",runs[i]/16.0,runs[i+1]/16.0);
+      printf("\n");
+#endif
       x1 = runs[0];
       if (curY > 0) {
 	if (curY == (prevY+1) && x1 <= MAX_NLX) {
@@ -613,7 +624,7 @@ static mp_obj_t generate(size_t n_args, const mp_obj_t *args) {
 	  mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(cmd&0xff));
 	}
 
-	curX = runs[i+1] + 1;
+	curX = runs[i+1];
       }
       prevY = curY;
     } else {
