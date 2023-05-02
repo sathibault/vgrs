@@ -34,16 +34,16 @@ extern void *vgr2d_alloc(size_t size, int n);
 
 //////////////////////////////////////// Utils
 
-void list_minmax(uint16_t *pts, int n, uint16_t *minx_p, uint16_t *maxx_p, uint16_t *miny_p, uint16_t *maxy_p)
+void list_minmax(int16_t *pts, int n, int16_t *minx_p, int16_t *maxx_p, int16_t *miny_p, int16_t *maxy_p)
 
 {
-  *minx_p = 0xffffu;
-  *miny_p = 0xffffu;
+  *minx_p = INT16_MAX;
+  *miny_p = INT16_MAX;
   *maxx_p = 0;
   *maxy_p = 0;
   for (int i = 0; i < n; i += 2) {
-    uint16_t x = pts[i];
-    uint16_t y = pts[i+1];
+    int16_t x = pts[i];
+    int16_t y = pts[i+1];
     if (x < *minx_p) *minx_p = x;
     if (x > *maxx_p) *maxx_p = x;
     if (y < *miny_p) *miny_p = y;
@@ -54,7 +54,7 @@ void list_minmax(uint16_t *pts, int n, uint16_t *minx_p, uint16_t *maxx_p, uint1
 
 //////////////////////////////////////// Edge
 
-static void fill_edges(uint16_t id, uint16_t *pts, int n, int y0, edge_t **edges) {
+static void fill_edges(uint16_t id, int16_t *pts, int n, int y0, edge_t **edges) {
   int i, j;
   int X1,Y1,X2,Y2,Y3;
   edge_t *e;
@@ -123,13 +123,13 @@ void init_transform(transform_t *tr) {
 
 //////////////////////////////////////// Rectangle
 
-bool rect_next_line(void *arg, uint16_t* y) {
+bool rect_next_line(void *arg, int16_t* y) {
   rect_iter_t * iter = (rect_iter_t *)arg;
   *y = iter->y;
   return (*y <= iter->y2);
 }
 
-bool rect_next_run(void *arg, uint16_t y, uint16_t* x1, uint16_t *x2, uint8_t* clr) {
+bool rect_next_run(void *arg, int16_t y, int16_t* x1, int16_t *x2, uint8_t* clr) {
   rect_iter_t * iter = (rect_iter_t *)arg;
   if (iter->y == y) {
     *x1 = iter->x1;
@@ -145,9 +145,9 @@ void init_rectangle_iter(rectangle_t *rect, rect_iter_t *iter) {
   iter->base.size = sizeof(rect_iter_t);
   iter->base.nextLine = rect_next_line;
   iter->base.nextRun = rect_next_run;
-  iter->x1 = (uint16_t)rect->tr.tx;
+  iter->x1 = (int16_t)rect->tr.tx;
   iter->x2 = iter->x1 + XFX(rect->w-1);
-  iter->y = (uint16_t)rect->tr.ty;
+  iter->y = (int16_t)rect->tr.ty;
   iter->y2 = iter->y + YFX(rect->h-1);
   iter->clr = rect->fclr;
 }
@@ -155,7 +155,7 @@ void init_rectangle_iter(rectangle_t *rect, rect_iter_t *iter) {
 
 //////////////////////////////////////// Polygon
 
-static void poly_advance(poly_iter_t *iter, uint16_t curY) {
+static void poly_advance(poly_iter_t *iter, int16_t curY) {
   int i, j;
   int subY = YFX(curY);
   // filter out finished edges
@@ -210,16 +210,16 @@ static void poly_get_active(poly_iter_t *iter) {
   iter->cur = 0;
 }
 
-static bool poly_next_line(void *arg, uint16_t* y) {
+static bool poly_next_line(void *arg, int16_t* y) {
   poly_iter_t * iter = (poly_iter_t *)arg;
   *y = iter->ty + iter->y;
   return (iter->n_active > 0);
 }
 
-static bool polyfill_next_run(void *arg, uint16_t yin, uint16_t* x1out, uint16_t *x2out, uint8_t* clr) {
-  uint16_t X1, X2;
+static bool polyfill_next_run(void *arg, int16_t yin, int16_t* x1out, int16_t *x2out, uint8_t* clr) {
+  int16_t X1, X2;
   poly_iter_t * iter = (poly_iter_t *)arg;
-  uint16_t y = yin - iter->ty;
+  int16_t y = yin - iter->ty;
   
   if (y == iter->y && iter->cur < iter->n_active) {
     X1 = iter->x_coords[iter->cur];
@@ -238,13 +238,13 @@ static bool polyfill_next_run(void *arg, uint16_t yin, uint16_t* x1out, uint16_t
 };
 
 static void init_polyfill_iter(polygon_t *poly, poly_iter_t *iter) {
-  uint16_t mnx, mxx, mny, mxy;
+  int16_t mnx, mxx, mny, mxy;
 
   iter->base.nextLine = poly_next_line;
   iter->base.nextRun = polyfill_next_run;
   list_minmax(poly->pts, poly->n_pts, &mnx, &mxx, &mny, &mxy);
-  iter->tx = (uint16_t)poly->tr.tx;
-  iter->ty = (uint16_t)poly->tr.ty;
+  iter->tx = (int16_t)poly->tr.tx;
+  iter->ty = (int16_t)poly->tr.ty;
   iter->y0 = mny;
   iter->n_edges = mxy-mny+1;
   iter->edges = (edge_t **)vgr2d_alloc(sizeof(edge_t *), iter->n_edges);
@@ -262,10 +262,10 @@ static void init_polyfill_iter(polygon_t *poly, poly_iter_t *iter) {
   iter->sclr = poly->sclr;
 }
 
-static int merge_spans(poly_iter_t *iter, int endpoint, uint16_t* x1, uint16_t *x2) {
+static int merge_spans(poly_iter_t *iter, int endpoint, int16_t* x1, int16_t *x2) {
   int i, j;
   int n_past=0;
-  uint16_t past_ids[MAX_ACTIVE];
+  int16_t past_ids[MAX_ACTIVE];
   int16_t past_x[MAX_ACTIVE];
   int16_t x;
 
@@ -294,14 +294,14 @@ static int merge_spans(poly_iter_t *iter, int endpoint, uint16_t* x1, uint16_t *
   return endpoint;
 }
 
-static bool polystroke_next_run(void *arg, uint16_t yin, uint16_t* x1out, uint16_t *x2out, uint8_t* clr) {
-  uint16_t X1, X2;
+static bool polystroke_next_run(void *arg, int16_t yin, int16_t* x1out, int16_t *x2out, uint8_t* clr) {
+  int16_t X1, X2;
   poly_iter_t * iter = (poly_iter_t *)arg;
-  uint16_t y = yin - iter->ty;
+  int16_t y = yin - iter->ty;
   
   if (y == iter->y && iter->cur < iter->n_active) {
     int cur = iter->cur;
-    uint16_t id = iter->idmap[cur];
+    int16_t id = iter->idmap[cur];
     X1 = iter->x_coords[cur++];
     if (iter->idmap[cur] != id) {
       // overlapping span, need merge
@@ -330,10 +330,10 @@ static bool polystroke_next_run(void *arg, uint16_t yin, uint16_t* x1out, uint16
 
 static void init_polystroke_iter(polygon_t *poly, poly_iter_t *iter) {
   int i;
-  uint16_t xr, yr;
-  uint16_t mnx, mxx, mny, mxy;
+  int16_t xr, yr;
+  int16_t mnx, mxx, mny, mxy;
   int X1,Y1,X2,Y2,dx,dy;
-  uint16_t pts[14];
+  int16_t pts[14];
 
   iter->base.nextLine = poly_next_line;
   iter->base.nextRun = polystroke_next_run;
@@ -342,8 +342,8 @@ static void init_polystroke_iter(polygon_t *poly, poly_iter_t *iter) {
   list_minmax(poly->pts, poly->n_pts, &mnx, &mxx, &mny, &mxy);
   mny = (mny > yr) ? mny - yr : 0;
   mxy += yr;
-  iter->tx = (uint16_t)poly->tr.tx;
-  iter->ty = (uint16_t)poly->tr.ty;
+  iter->tx = (int16_t)poly->tr.tx;
+  iter->ty = (int16_t)poly->tr.ty;
   iter->y0 = mny;
   iter->n_edges = mxy-mny+1;
   iter->edges = (edge_t **)vgr2d_alloc(sizeof(edge_t *), iter->n_edges);

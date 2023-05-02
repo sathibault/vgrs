@@ -168,7 +168,7 @@ static mp_obj_t polygon_make_new(const mp_obj_type_t *type, size_t n_args, size_
   mp_obj_list_get(args[0], &list_len, &list);
 
   self->poly.n_pts = 2*list_len+2;
-  self->poly.pts = m_new(uint16_t, self->poly.n_pts);
+  self->poly.pts = m_new(int16_t, self->poly.n_pts);
 
   int i, j;
   for (i = 0, j = 0; i < list_len; i++, j+=2) {
@@ -251,7 +251,7 @@ static mp_obj_t polyline_make_new(const mp_obj_type_t *type, size_t n_args, size
   mp_obj_list_get(args[0], &list_len, &list);
 
   self->poly.n_pts = 2*list_len;
-  self->poly.pts = m_new(uint16_t, self->poly.n_pts);
+  self->poly.pts = m_new(int16_t, self->poly.n_pts);
 
   int i, j;
   for (i = 0, j = 0; i < list_len; i++, j+=2) {
@@ -328,7 +328,7 @@ static mp_obj_t line_make_new(const mp_obj_type_t *type, size_t n_args, size_t n
     mp_raise_ValueError(MP_ERROR_TEXT("Stoke width must be at least 1"));
 
   self->poly.n_pts = 4;
-  self->poly.pts = m_new(uint16_t, self->poly.n_pts);
+  self->poly.pts = m_new(int16_t, self->poly.n_pts);
 
   int i, j;
   for (i = 0, j = 0; i < 2; i++, j+=2) {
@@ -416,7 +416,7 @@ static iter_base_t *make_iter(mp_obj_t obj) {
 static int sort_runs(uint16_t *runs, uint8_t *clr, int nx) {
   int n = nx>>1;
   uint8_t c;
-  uint16_t x1, x2;
+  int16_t x1, x2;
 
   for (int i = 0; i < n; i++) {
     for (int j = n-1; j > i; j--) {
@@ -440,7 +440,7 @@ static int sort_runs(uint16_t *runs, uint8_t *clr, int nx) {
   int ri = 2;
   for (int i = 1; i < n; i++) {
     if (runs[ri] >= runs[oi-1]) {
-      uint16_t dx = runs[ri]-runs[oi-1];
+      int16_t dx = runs[ri]-runs[oi-1];
       // dx 0 is okay, otherwise must meet minimum
       if (dx != 0) {
 	if (XFX_INT(runs[ri]) == (XFX_INT(runs[oi-1])+1)) {
@@ -492,8 +492,8 @@ static mp_obj_t generate(size_t n_args, const mp_obj_t *args) {
   int len = (int)list_len;
 
   uint16_t cmd;
-  uint16_t curY, y, prevY;
-  uint16_t x1, x2, dx, dx0, s, s0, curX;
+  int16_t curY, y, prevY;
+  int16_t x1, x2, dx, dx0, s, s0, curX;
   uint8_t c;
   int i, ri;
 
@@ -509,10 +509,10 @@ static mp_obj_t generate(size_t n_args, const mp_obj_t *args) {
   mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(addr>>8));
   mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(addr&0xff));
 
-  prevY = 0xffff;
+  prevY = INT16_MAX;
   do {
     // find next closest line
-    curY = 0xffff;
+    curY = INT16_MAX;
     for (i = 0; i < len; i++) {
       if (iters[i] != NULL) {
 	if (iters[i]->nextLine(iters[i], &y)) {
@@ -524,7 +524,7 @@ static mp_obj_t generate(size_t n_args, const mp_obj_t *args) {
 	}
       }
     }
-    if (curY == 0xffff || curY >= yres) break;
+    if (curY == INT16_MAX || curY >= yres) break;
 
     // collect runs on this line
     ri = 0;

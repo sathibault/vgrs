@@ -33,8 +33,8 @@ limitations under the License.
 
 typedef struct iter_base_s {
   size_t size;
-  bool (*nextLine)(void *, uint16_t*);
-  bool (*nextRun)(void *, uint16_t, uint16_t*, uint16_t*, uint8_t*);
+  bool (*nextLine)(void *, int16_t*);
+  bool (*nextRun)(void *, int16_t, int16_t*, int16_t*, uint8_t*);
 } iter_base_t;
 
 typedef struct edge {
@@ -55,13 +55,13 @@ typedef struct rectangle_s {
   transform_t tr;
   bool fill, stroke;
   uint8_t fclr,sclr;
-  uint16_t w, h;
+  int16_t w, h;
 } rectangle_t;
 
 typedef struct rect_iter_s {
   iter_base_t base;
-  uint16_t y, y2;
-  uint16_t x1, x2;
+  int16_t y, y2;
+  int16_t x1, x2;
   uint8_t clr;
 } rect_iter_t;
 
@@ -70,7 +70,7 @@ typedef struct polygon_s {
   transform_t tr;
   bool fill, stroke;
   uint8_t fclr,sclr;
-  uint16_t *pts;
+  int16_t *pts;
   int n_pts, width;
 } polygon_t;
 
@@ -83,7 +83,7 @@ typedef struct poly_iter_s {
   int16_t x_coords[MAX_ACTIVE];
   uint16_t idmap[MAX_ACTIVE];
   int n_active, cur, width;
-  uint16_t ty, tx, y0, y;
+  int16_t ty, tx, y0, y;
   bool fill, stroke;
   uint8_t fclr, sclr;
 } poly_iter_t;
