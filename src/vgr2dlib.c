@@ -185,7 +185,7 @@ static void poly_get_active(poly_iter_t *iter) {
 
   poly_advance(iter, iter->y);
   while (iter->n_active == 0 && iter->idx < iter->n_edges) {
-    iter->y += 1;
+    iter->idx += 1;
   }
 
   // sort and update
