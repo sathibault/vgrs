@@ -450,7 +450,8 @@ static int sort_runs(uint16_t *runs, uint8_t *clr, int nx) {
 	  runs[oi-1] = XFX(XFX_INT(runs[ri]));
 	  runs[ri] = runs[oi-1];
 	} else if (dx < MIN_DX) {
-	  runs[ri] = runs[oi-1]+MIN_DX;
+	  // if < 1 pix and not consecutive x pos the x is same
+	  runs[ri] = runs[oi-1];
 	}
       }
     } else {
