@@ -39,6 +39,9 @@ limitations under the License.
 #define MAX_CLRX 0xff // 4.4
 #define MIN_DX 0x10
 
+// 4 dx + 4 span
+#define MAX_PACKED_SIZE 16
+
 extern uint8_t fpga_graphics_dev();
 extern void fpga_write_internal(uint8_t *buf, unsigned int len, bool hold);
 
@@ -447,7 +450,8 @@ static int sort_runs(uint16_t *runs, uint8_t *clr, int nx) {
 	  runs[oi-1] = XFX(XFX_INT(runs[ri]));
 	  runs[ri] = runs[oi-1];
 	} else if (dx < MIN_DX) {
-	  runs[ri] = runs[oi-1]+MIN_DX;
+	  // if < 1 pix and not consecutive x pos the x is same
+	  runs[ri] = runs[oi-1];
 	}
       }
     } else {
@@ -481,16 +485,16 @@ static uint16_t split_span(uint16_t n, uint16_t sz0, uint16_t sz1) {
   return (m<MIN_DX) ? (sz0 - (XFX(1)-m)) : sz0;
 }
 
-static mp_obj_t generate(size_t n_args, const mp_obj_t *args) {
-  uint16_t addr = mp_obj_get_int(args[0]);
-  int xres = XFX(mp_obj_get_int(args[2]));
-  int yres = mp_obj_get_int(args[3]);
 
+static uint16_t generator(int xres, int yres, mp_obj_t obj_list,
+			  uint8_t *buf, size_t buflen,
+			  void (*emit)(uint8_t *, size_t)) {
   size_t list_len = 0;
   mp_obj_t *list = NULL;
-  mp_obj_list_get(args[1], &list_len, &list);
+  mp_obj_list_get(obj_list, &list_len, &list);
   int len = (int)list_len;
 
+  size_t bufpos;
   uint16_t cmd;
   uint16_t curY, y, prevY;
   uint16_t x1, x2, dx, dx0, s, s0, curX;
@@ -504,10 +508,7 @@ static mp_obj_t generate(size_t n_args, const mp_obj_t *args) {
   uint16_t * runs = (uint16_t *)m_malloc(2 * MAX_RUNS * sizeof(uint16_t));
   uint8_t * clr = (uint8_t *)m_malloc(MAX_RUNS * sizeof(uint8_t));
 
-  mp_obj_t return_list = mp_obj_new_list(0, NULL);
-
-  mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(addr>>8));
-  mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(addr&0xff));
+  bufpos = 0;
 
   prevY = 0xffff;
   do {
@@ -545,6 +546,10 @@ static mp_obj_t generate(size_t n_args, const mp_obj_t *args) {
       ri = sort_runs(runs, clr, ri);
 
     if (ri > 0) {
+      if ((bufpos + 2 + (ri>>1)*MAX_PACKED_SIZE + 2) > buflen) {
+	emit(buf, bufpos);
+	bufpos = 0;
+      }
 #if 0
       printf("%d>",curY);
       for (i = 0; i < ri; i+=2)
@@ -560,8 +565,8 @@ static mp_obj_t generate(size_t n_args, const mp_obj_t *args) {
 	  cmd = 0xf000|curY;
 	  curX = 0;
 	}
-	mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(cmd>>8));
-	mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(cmd&0xff));
+	buf[bufpos++] = cmd>>8;
+	buf[bufpos++] = cmd&0xff;
       } else
 	curX = 0;
       for (i = 0; i < ri; i+=2) {
@@ -586,20 +591,20 @@ static mp_obj_t generate(size_t n_args, const mp_obj_t *args) {
 	if (dx > MAX_DX) {
 	  dx0 = split_span(dx, MAX_DX, MAX_DX);
 	  cmd = 0x8000|dx0;
-	  mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(cmd>>8));
-	  mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(cmd&0xff));
+	  buf[bufpos++] = cmd>>8;
+	  buf[bufpos++] = cmd&0xff;
 	  dx -= dx0;
 	}
 	while (dx > MAX_DX) {
 	  cmd = 0x8000|MAX_DX;
-	  mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(cmd>>8));
-	  mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(cmd&0xff));
+	  buf[bufpos++] = cmd>>8;
+	  buf[bufpos++] = cmd&0xff;
 	  dx -= MAX_DX;
 	}
 	if (dx > 0) {
 	  cmd = 0x8000|dx;
-	  mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(cmd>>8));
-	  mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(cmd&0xff));
+	  buf[bufpos++] = cmd>>8;
+	  buf[bufpos++] = cmd&0xff;
 	}
 
 	if (s > MAX_CLRX) {
@@ -610,18 +615,18 @@ static mp_obj_t generate(size_t n_args, const mp_obj_t *args) {
 	  cmd = (((uint16_t)clr[i>>1])<<8)|s;
 	  s = 0;
 	}
-	mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(cmd>>8));
-	mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(cmd&0xff));
+	buf[bufpos++] = cmd>>8;
+	buf[bufpos++] = cmd&0xff;
 	while (s > MAX_SPANX) {
 	  cmd = 0xc000|MAX_SPANX;
-	  mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(cmd>>8));
-	  mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(cmd&0xff));
+	  buf[bufpos++] = cmd>>8;
+	  buf[bufpos++] = cmd&0xff;
 	  s -= MAX_SPANX;
 	}
 	if (s > 0) {
 	  cmd = 0xc000|s;
-	  mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(cmd>>8));
-	  mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(cmd&0xff));
+	  buf[bufpos++] = cmd>>8;
+	  buf[bufpos++] = cmd&0xff;
 	}
 
 	curX = runs[i+1];
@@ -633,9 +638,6 @@ static mp_obj_t generate(size_t n_args, const mp_obj_t *args) {
     }
   } while (true);
 
-  mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(0xff));
-  mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(0xff));
-
   for (i = 0; i < len; i++) {
     if (iters[i] != NULL) {
       MFREE(iters[i], iters[i]->size);
@@ -646,37 +648,75 @@ static mp_obj_t generate(size_t n_args, const mp_obj_t *args) {
   MFREE(runs, 2 * MAX_RUNS * sizeof(uint16_t));
   MFREE(iters, len * sizeof(iter_base_t*));
 
+  return(bufpos);
+}
+
+#define GEN_BUF_SIZE 100
+
+static mp_obj_t *emit_list;
+
+static void list_emit(uint8_t *buf, size_t len) {
+  for (size_t i = 0; i < len; i++)
+    mp_obj_list_append(*emit_list, MP_OBJ_NEW_SMALL_INT(buf[i]));
+}
+
+static mp_obj_t generate(size_t n_args, const mp_obj_t *args) {
+  uint16_t addr = mp_obj_get_int(args[0]);
+  int xres = XFX(mp_obj_get_int(args[2]));
+  int yres = mp_obj_get_int(args[3]);
+
+  uint8_t *buf = (uint8_t *)m_malloc(GEN_BUF_SIZE);
+
+  mp_obj_t return_list = mp_obj_new_list(0, NULL);
+
+  mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(addr>>8));
+  mp_obj_list_append(return_list, MP_OBJ_NEW_SMALL_INT(addr&0xff));
+
+  emit_list = &return_list;
+  uint8_t bufpos = generator(xres, yres, args[1],
+			     buf, GEN_BUF_SIZE, list_emit);
+  // terminator
+  buf[bufpos++] = 0xff;
+  buf[bufpos++] = 0xff;
+  list_emit(buf, bufpos);
+
+  MFREE(buf, GEN_BUF_SIZE);
+
   return MP_OBJ_FROM_PTR(return_list);
 }
 
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(generate_fun, 4, 4, generate);
 
-#define SPI_SIZE 128
+#define SPI_SIZE 254
+
+static void fpga_emit(uint8_t *buf, size_t len) {
+  fpga_write_internal(buf, len, true);
+}
 
 static mp_obj_t display2d(size_t n_args, const mp_obj_t *args) {
-  mp_obj_t ops = generate(n_args, args);
+  uint16_t addr = mp_obj_get_int(args[0]);
+  int xres = XFX(mp_obj_get_int(args[2]));
+  int yres = mp_obj_get_int(args[3]);
 
-  uint8_t *buf = (uint8_t *)m_malloc(128);
-
-  size_t len = 0;
-  mp_obj_t *list = NULL;
-  mp_obj_list_get(ops, &len, &list);
+  uint8_t *buf = (uint8_t *)m_malloc(SPI_SIZE);
 
   buf[0] = fpga_graphics_dev();
   buf[1] = 0x03;
-  fpga_write_internal(buf, 2, true);
+  buf[2] = addr>>8;
+  buf[3] = addr&0xff;
+  fpga_write_internal(buf, 4, true);
 
-  for (unsigned i = 0; len > 0; ) {
-    unsigned sz = (len <= SPI_SIZE) ? len : SPI_SIZE;
-    for (unsigned j = 0; j < sz; j++)
-      buf[j] = mp_obj_get_int(list[i+j]);
-    fpga_write_internal(buf, sz, len > sz);
-    i += sz;
-    len -= sz;
-  }
-  MFREE(buf, 128);
+  uint16_t bufpos = generator(xres, yres, args[1],
+			      buf, SPI_SIZE, fpga_emit);
+  // terminator
+  buf[bufpos++] = 0xff;
+  buf[bufpos++] = 0xff;
+  fpga_write_internal(buf, bufpos, false);
+
+  MFREE(buf, SPI_SIZE);
   return mp_const_none;
 }
+
 STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(display2d_fun, 4, 4, display2d);
 
 static const mp_rom_map_elem_t module_globals_table[] = {
