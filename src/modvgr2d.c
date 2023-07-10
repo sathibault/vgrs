@@ -693,10 +693,23 @@ static void fpga_emit(uint8_t *buf, size_t len) {
   fpga_write_internal(buf, len, true);
 }
 
-static mp_obj_t display2d(size_t n_args, const mp_obj_t *args) {
+static void print_emit(uint8_t *buf, size_t len) {
+  for (size_t i = 0; i < len; i++) {
+    mp_printf(&mp_plat_print, "%02X", buf[i]);
+  }
+  mp_printf(&mp_plat_print, "\n");
+}
+
+static mp_obj_t display2d(size_t n_args, const mp_obj_t *args, mp_map_t *kw_map) {
+  static const mp_arg_t allowed_kw[] = {
+    {MP_QSTR_dump, MP_ARG_KW_ONLY | MP_ARG_OBJ, {.u_obj = mp_const_false}},
+  };
+  mp_arg_val_t kw[MP_ARRAY_SIZE(allowed_kw)];
+  mp_arg_parse_all(n_args - 4, args + 4, kw_map, MP_ARRAY_SIZE(allowed_kw), allowed_kw, kw);
   uint16_t addr = mp_obj_get_int(args[0]);
   int xres = XFX(mp_obj_get_int(args[2]));
   int yres = mp_obj_get_int(args[3]);
+  bool dump = mp_obj_is_true(kw[0].u_obj);
 
   uint8_t *buf = (uint8_t *)m_malloc(SPI_SIZE);
 
@@ -708,6 +721,10 @@ static mp_obj_t display2d(size_t n_args, const mp_obj_t *args) {
 
   uint16_t bufpos = generator(xres, yres, args[1],
 			      buf, SPI_SIZE, fpga_emit);
+  if (dump) {
+    generator(xres, yres, args[1], buf, SPI_SIZE, print_emit);
+  }
+
   // terminator
   buf[bufpos++] = 0xff;
   buf[bufpos++] = 0xff;
@@ -717,7 +734,7 @@ static mp_obj_t display2d(size_t n_args, const mp_obj_t *args) {
   return mp_const_none;
 }
 
-STATIC MP_DEFINE_CONST_FUN_OBJ_VAR_BETWEEN(display2d_fun, 4, 4, display2d);
+STATIC MP_DEFINE_CONST_FUN_OBJ_KW(display2d_fun, 4, display2d);
 
 static const mp_rom_map_elem_t module_globals_table[] = {
     { MP_ROM_QSTR(MP_QSTR___name__), MP_ROM_QSTR(MP_QSTR_rvgr) },
